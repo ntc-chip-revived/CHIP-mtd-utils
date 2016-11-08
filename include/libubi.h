@@ -76,6 +76,8 @@ struct ubi_mkvol_request
 	int alignment;
 	long long bytes;
 	int vol_type;
+	int vol_mode;
+	int slc_ratio;
 	const char *name;
 };
 

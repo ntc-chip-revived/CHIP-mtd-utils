@@ -1023,6 +1023,8 @@ int ubi_mkvol(libubi_t desc, const char *node, struct ubi_mkvol_request *req)
 	r.alignment = req->alignment;
 	r.bytes = req->bytes;
 	r.vol_type = req->vol_type;
+	r.vol_mode = req->vol_mode;
+	r.slc_ratio = req->slc_ratio;
 
 	n = strlen(req->name);
 	if (n > UBI_MAX_VOLUME_NAME)

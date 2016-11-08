@@ -38,6 +38,8 @@
 struct args {
 	int vol_id;
 	int vol_type;
+	int vol_mode;
+	int slc_ratio;
 	long long bytes;
 	int lebs;
 	int alignment;
@@ -48,6 +50,7 @@ struct args {
 
 static struct args args = {
 	.vol_type = UBI_DYNAMIC_VOLUME,
+	.vol_mode = UBI_VOL_MODE_NORMAL,
 	.bytes = -1,
 	.lebs = -1,
 	.alignment = 1,
@@ -68,6 +71,8 @@ static const char optionsstr[] =
 "                              eraseblocks\n"
 "-m, --maxavsize               set volume size to maximum available size\n"
 "-t, --type=<static|dynamic>   volume type (dynamic, static), default is dynamic\n"
+"-m, --mode=<normal|slc|mlc-safe> volume mode (normal, slc, mlc-safe), default is normal\n"
+"-r, --slc-ratio=<ratio>       SLC vs MLC PEBs ratio\n"
 "-h, -?, --help                print help message\n"
 "-V, --version                 print program version";
 
@@ -76,8 +81,8 @@ static const char usage[] =
 "Usage: " PROGRAM_NAME " <UBI device node file name> [-h] [-a <alignment>] [-n <volume ID>] [-N <name>]\n"
 "\t\t\t[-s <bytes>] [-S <LEBs>] [-t <static|dynamic>] [-V] [-m]\n"
 "\t\t\t[--alignment=<alignment>][--vol_id=<volume ID>] [--name=<name>]\n"
-"\t\t\t[--size=<bytes>] [--lebs=<LEBs>] [--type=<static|dynamic>] [--help]\n"
-"\t\t\t[--version] [--maxavsize]\n\n"
+"\t\t\t[--size=<bytes>] [--lebs=<LEBs>] [--type=<static|dynamic>] [--mode=<normal|slc|mlc-safe>]\n"
+"\t\t\t[--slc-ratio=<ratio>] [--help] [--version] [--maxavsize]\n\n"
 "Example: " PROGRAM_NAME " /dev/ubi0 -s 20MiB -N config_data - create a 20 Megabytes volume\n"
 "         named \"config_data\" on UBI device /dev/ubi0.";
 
@@ -88,6 +93,8 @@ static const struct option long_options[] = {
 	{ .name = "size",      .has_arg = 1, .flag = NULL, .val = 's' },
 	{ .name = "lebs",      .has_arg = 1, .flag = NULL, .val = 'S' },
 	{ .name = "type",      .has_arg = 1, .flag = NULL, .val = 't' },
+	{ .name = "mode",      .has_arg = 1, .flag = NULL, .val = 'M' },
+	{ .name = "slc-ratio", .has_arg = 1, .flag = NULL, .val = 'r' },
 	{ .name = "help",      .has_arg = 0, .flag = NULL, .val = 'h' },
 	{ .name = "version",   .has_arg = 0, .flag = NULL, .val = 'V' },
 	{ .name = "maxavsize", .has_arg = 0, .flag = NULL, .val = 'm' },
@@ -121,7 +128,7 @@ static int parse_opt(int argc, char * const argv[])
 	while (1) {
 		int key, error = 0;
 
-		key = getopt_long(argc, argv, "a:n:N:s:S:t:h?Vm", long_options, NULL);
+		key = getopt_long(argc, argv, "a:n:N:s:S:t:M:r:h?Vm", long_options, NULL);
 		if (key == -1)
 			break;
 
@@ -135,6 +142,17 @@ static int parse_opt(int argc, char * const argv[])
 				return errmsg("bad volume type: \"%s\"", optarg);
 			break;
 
+		case 'M':
+			if (!strcmp(optarg, "normal"))
+				args.vol_mode = UBI_DYNAMIC_VOLUME;
+			else if (!strcmp(optarg, "slc"))
+				args.vol_mode = UBI_VOL_MODE_SLC;
+			else if (!strcmp(optarg, "mlc-safe"))
+				args.vol_mode = UBI_VOL_MODE_MLC_SAFE;
+			else
+				return errmsg("bad volume mode: \"%s\"", optarg);
+			break;
+
 		case 's':
 			args.bytes = util_get_bytes(optarg);
 			if (args.bytes <= 0)
@@ -144,6 +162,11 @@ static int parse_opt(int argc, char * const argv[])
 		case 'S':
 			args.lebs = simple_strtoull(optarg, &error);
 			if (error || args.lebs <= 0)
+				return errmsg("bad LEB count: \"%s\"", optarg);
+
+		case 'r':
+			args.slc_ratio = simple_strtoull(optarg, &error);
+			if (error || args.slc_ratio <= 0)
 				return errmsg("bad LEB count: \"%s\"", optarg);
 			break;
 
@@ -260,6 +283,8 @@ int main(int argc, char * const argv[])
 	req.alignment = args.alignment;
 	req.bytes = args.bytes;
 	req.vol_type = args.vol_type;
+	req.vol_mode = args.vol_mode;
+	req.slc_ratio = args.slc_ratio;
 	req.name = args.name;
 
 	err = ubi_mkvol(libubi, args.node, &req);
