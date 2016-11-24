@@ -33,7 +33,11 @@
 #include <asm/byteorder.h>
 
 /* The version of UBI images supported by this implementation */
-#define UBI_VERSION 1
+#define UBI_CURRENT_VERSION		2
+#define UBI_SUPPORTS_VERSION(x)		BIT(x)
+#define UBI_SUPPORTED_VERSIONS		(UBI_SUPPORTS_VERSION(1) |	\
+					 UBI_SUPPORTS_VERSION(2))
+#define UBI_VERSION_IS_SUPPORTED(x)	(BIT((x)) & UBI_SUPPORTED_VERSIONS)
 
 /* The highest erase counter value supported by this implementation */
 #define UBI_MAX_ERASECOUNTER 0x7FFFFFFF
@@ -112,6 +116,32 @@ enum {
 	UBI_COMPAT_REJECT   = 5
 };
 
+/*
+ * Mode constants used by internal volumes.
+ *
+ * @UBI_VID_MODE_NORMAL: eraseblocks are used as is. All pages within a block
+ *			 are written. Safe to be used on all devices except
+ *			 MLC/TLC NANDs
+ * @UBI_VID_MODE_SLC: eraseblocks are used in SLC mode (this is a software
+ *		      emulation of an SLC NAND, not the hardware SLC mode
+ *		      which is sometime provided by NAND vendors). Only the
+ *		      first write-unit/page of each pair of pages is used,
+ *		      which makes this mode robust against 'paired page'
+ *		      corruption.
+ *		      In the other hand, this means UBI will only expose half
+ *		      the capacity of the NAND.
+ * @UBI_VID_MODE_MLC_SAFE: eraseblocks are used in SLC mode when they are being
+ *			   written and are consolidated in MLC mode in
+ *			   background. This allows us to maximize storage
+ *			   utilization while keeping it robust against paired
+ *			   page corruption
+ */
+enum {
+	UBI_VID_MODE_NORMAL,
+	UBI_VID_MODE_SLC,
+	UBI_VID_MODE_MLC_SAFE,
+};
+
 /* Sizes of UBI headers */
 #define UBI_EC_HDR_SIZE  sizeof(struct ubi_ec_hdr)
 #define UBI_VID_HDR_SIZE sizeof(struct ubi_vid_hdr)
@@ -149,10 +179,10 @@ enum {
  * The @image_seq field is used to validate a UBI image that has been prepared
  * for a UBI device. The @image_seq value can be any value, but it must be the
  * same on all eraseblocks. UBI will ensure that all new erase counter headers
- * also contain this value, and will check the value when scanning at start-up.
+ * also contain this value, and will check the value when attaching the flash.
  * One way to make use of @image_seq is to increase its value by one every time
  * an image is flashed over an existing image, then, if the flashing does not
- * complete, UBI will detect the error when scanning.
+ * complete, UBI will detect the error when attaching the media.
  */
 struct ubi_ec_hdr {
 	__be32  magic;
@@ -166,11 +196,26 @@ struct ubi_ec_hdr {
 	__be32  hdr_crc;
 } __attribute__ ((packed));
 
+/*
+ * Magic lpos value to tell the implementation that the VID header is a
+ * dummy header and that the real headers are placed at the end of the
+ * PEB.
+ * This is set when consolidating several LEBs in an MLC PEB.
+ */
+#define UBI_VID_LPOS_CONSOLIDATED	0xff
+
+/*
+ * Mark a VID header as invalid. Useful when we are copying a PEB containing
+ * LEBs that have been invalidated.
+ */
+#define UBI_VID_LPOS_INVALID		0xfe
+
 /**
  * struct ubi_vid_hdr - on-flash UBI volume identifier header.
  * @magic: volume identifier header magic number (%UBI_VID_HDR_MAGIC)
  * @version: UBI implementation version which is supposed to accept this UBI
- *           image (%UBI_VERSION)
+ *           image (see %UBI_SUPPORTED_VERSIONS for the currently supported
+ *           versions)
  * @vol_type: volume type (%UBI_VID_DYNAMIC or %UBI_VID_STATIC)
  * @copy_flag: if this logical eraseblock was copied from another physical
  *             eraseblock (for wear-leveling reasons)
@@ -178,6 +223,8 @@ struct ubi_ec_hdr {
  *          %UBI_COMPAT_IGNORE, %UBI_COMPAT_PRESERVE, or %UBI_COMPAT_REJECT)
  * @vol_id: ID of this volume
  * @lnum: logical eraseblock number
+ * @vol_mode: mode of this volume (%UBI_VID_MODE_NORMAL or %UBI_VID_MODE_SLC)
+ * @lpos: LEB position in the PEB.
  * @padding1: reserved for future, zeroes
  * @data_size: how many bytes of data this logical eraseblock contains
  * @used_ebs: total number of used logical eraseblocks in this volume
@@ -283,7 +330,9 @@ struct ubi_vid_hdr {
 	__u8    compat;
 	__be32  vol_id;
 	__be32  lnum;
-	__be32  leb_ver;
+	__u8	vol_mode;
+	__u8	lpos;
+	__u8    padding1[2];
 	__be32  data_size;
 	__be32  used_ebs;
 	__be32  data_pad;
@@ -298,8 +347,8 @@ struct ubi_vid_hdr {
 #define UBI_INT_VOL_COUNT 1
 
 /*
- * Starting ID of internal volumes. There is reserved room for 4096 internal
- * volumes.
+ * Starting ID of internal volumes: 0x7fffefff.
+ * There is reserved room for 4096 internal volumes.
  */
 #define UBI_INTERNAL_VOL_START (0x7FFFFFFF - 4096)
 
@@ -335,7 +384,15 @@ struct ubi_vid_hdr {
  * @name_len: volume name length
  * @name: the volume name
  * @flags: volume flags (%UBI_VTBL_AUTORESIZE_FLG)
- * @padding: reserved, zeroes
+ * @vol_mode: volume mode (%UBI_VID_MODE_NORMAL, %UBI_VID_MODE_SLC or
+ *	      %UBI_VID_MODE_MLC_SAFE)
+ * @slc_ratio: SLC vs MLC LEBs ratio. Only applicable when vol_mode is set to
+ *	       %UBI_VID_MODE_MLC_SAFE
+ * @padding1: reserved, zeroes
+ * @reserved_lebs: how many logical eraseblocks are reserved for this volume.
+ *		   Should be zero unless vol_mode is set to
+ *		   %UBI_VID_MODE_MLC_SAFE.
+ * @padding2: reserved, zeroes
  * @crc: a CRC32 checksum of the record
  *
  * The volume table records are stored in the volume table, which is stored in
@@ -371,7 +428,11 @@ struct ubi_vtbl_record {
 	__be16  name_len;
 	__u8    name[UBI_VOL_NAME_MAX+1];
 	__u8    flags;
-	__u8    padding[23];
+	__u8	vol_mode;
+	__u8	slc_ratio;
+	__u8    padding1[1];
+	__be32	reserved_lebs;
+	__u8    padding2[16];
 	__be32  crc;
 } __attribute__ ((packed));
 
