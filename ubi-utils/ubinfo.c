@@ -237,11 +237,16 @@ static int print_dev_info(libubi_t libubi, int dev_num, int all)
 		return sys_errmsg("cannot get information about UBI device %d", dev_num);
 
 	printf("ubi%d\n", dev_info.dev_num);
+	printf("On-flash format version:                 %d\n", dev_info.version);
 	printf("Volumes count:                           %d\n", dev_info.vol_count);
 	printf("Logical eraseblock size:                 ");
 	util_print_bytes(dev_info.leb_size, 0);
 	printf("\n");
+	printf("logical eraseblock size in SLC mode:     ");
+	ubiutils_print_bytes(dev_info.slc_leb_size, 0);
+	printf("\n");
 
+	printf("Maximum number of LEBs per PEB:           %d\n", dev_info.max_lebs_per_peb);
 	printf("Total amount of physical eraseblocks:     %d\n", dev_info.total_pebs);
 	printf("Amount of available physical eraseblocks: %d\n", dev_info.avail_pebs);
 

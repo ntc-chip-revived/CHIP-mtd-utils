@@ -100,6 +100,7 @@ struct ubi_info
 
 /**
  * struct ubi_dev_info - UBI device information.
+ * @version: UBI on-flash format version
  * @dev_num: UBI device number
  * @mtd_num: MTD device number on top of which this UBI device is working
  * @vol_count: count of volumes on this UBI device
@@ -112,6 +113,9 @@ struct ubi_info
  *             volumes
  * @bad_count: count of bad physical eraseblocks
  * @leb_size: logical eraseblock size
+ * @slc_leb_size: logical eraseblock size when a PEB is used in SLC mode
+ * @max_lebs_per_peb: maximum number of LEBs you can store in a single PEB.
+ *		      This parameter is only applicable to MLC_SAFE volumes.
  * @max_ec: current highest erase counter value
  * @bad_rsvd: how many physical eraseblocks of the underlying flash device are
  *            reserved for bad eraseblocks handling
@@ -120,6 +124,7 @@ struct ubi_info
  */
 struct ubi_dev_info
 {
+	int version;
 	int dev_num;
 	int mtd_num;
 	int vol_count;
@@ -131,6 +136,8 @@ struct ubi_dev_info
 	int avail_pebs;
 	int bad_count;
 	int leb_size;
+	int slc_leb_size;
+	int max_lebs_per_peb;
 	long long max_ec;
 	int bad_rsvd;
 	int max_vol_count;

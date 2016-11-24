@@ -48,10 +48,13 @@ extern "C" {
 #define UBI_DEV_NAME_PATT "ubi%d"
 
 #define DEV_DEV           "dev"
+#define DEV_VERSION       "version"
 #define DEV_AVAIL_EBS     "avail_eraseblocks"
 #define DEV_TOTAL_EBS     "total_eraseblocks"
 #define DEV_BAD_COUNT     "bad_peb_count"
 #define DEV_EB_SIZE       "eraseblock_size"
+#define DEV_MAX_LEBS_PER_PEB "max_lebs_per_peb"
+#define DEV_SLC_EB_SIZE   "slc_eraseblock_size"
 #define DEV_MAX_EC        "max_ec"
 #define DEV_MAX_RSVD      "reserved_for_bad"
 #define DEV_MAX_VOLS      "max_vol_count"
@@ -77,10 +80,13 @@ extern "C" {
  * @ubi_dev: UBI device sysfs directory pattern
  * @ubi_version: UBI version file sysfs path
  * @dev_dev: UBI device major/minor numbers file pattern
+ * @dev_version: UBI on-flash format version file pattern
  * @dev_avail_ebs: count of available eraseblocks sysfs path pattern
  * @dev_total_ebs: total eraseblocks count sysfs path pattern
  * @dev_bad_count: count of bad eraseblocks sysfs path pattern
  * @dev_eb_size: size of UBI device's eraseblocks sysfs path pattern
+ * @dev_slc_eb_size: size of UBI device's SLC eraseblocks sysfs path pattern
+ * @dev_max_lebs_per_peb: maximum number of LEBs per PEB sysfs path pattern
  * @dev_max_ec: maximum erase counter sysfs path pattern
  * @dev_bad_rsvd: count of physical eraseblock reserved for bad eraseblocks
  *                handling
@@ -106,10 +112,13 @@ struct libubi
 	char *ubi_dev;
 	char *ubi_version;
 	char *dev_dev;
+	char *dev_version;
 	char *dev_avail_ebs;
 	char *dev_total_ebs;
 	char *dev_bad_count;
 	char *dev_eb_size;
+	char *dev_slc_eb_size;
+	char *dev_max_lebs_per_peb;
 	char *dev_max_ec;
 	char *dev_bad_rsvd;
 	char *dev_max_vols;

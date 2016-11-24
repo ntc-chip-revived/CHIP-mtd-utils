@@ -560,6 +560,10 @@ libubi_t libubi_open(void)
 	if (!lib->dev_dev)
 		goto out_error;
 
+	lib->dev_version = mkpath(lib->ubi_dev, DEV_VERSION);
+	if (!lib->dev_version)
+		goto out_error;
+
 	lib->dev_avail_ebs = mkpath(lib->ubi_dev, DEV_AVAIL_EBS);
 	if (!lib->dev_avail_ebs)
 		goto out_error;
@@ -576,6 +580,13 @@ libubi_t libubi_open(void)
 	if (!lib->dev_eb_size)
 		goto out_error;
 
+	lib->dev_slc_eb_size = mkpath(lib->ubi_dev, DEV_SLC_EB_SIZE);
+	if (!lib->dev_slc_eb_size)
+		goto out_error;
+
+	lib->dev_max_lebs_per_peb = mkpath(lib->ubi_dev, DEV_MAX_LEBS_PER_PEB);
+	if (!lib->dev_max_lebs_per_peb)
+		goto out_error;
 	lib->dev_max_ec = mkpath(lib->ubi_dev, DEV_MAX_EC);
 	if (!lib->dev_max_ec)
 		goto out_error;
@@ -1232,6 +1243,22 @@ int ubi_get_dev_info1(libubi_t desc, int dev_num, struct ubi_dev_info *info)
 	if (dev_read_int(lib->dev_min_io_size, dev_num, &info->min_io_size))
 		return -1;
 
+	/*
+	 * Old UBI implementation do not expose the on-flash format version.
+	 * Assume 1 in this case.
+	 */
+	if (dev_read_int(lib->dev_version, dev_num, &info->version))
+		info->version = 1;
+
+	/* Read UBI v2 sysfs entries. */
+	if (info->version > 1) {
+		if (dev_read_int(lib->dev_slc_eb_size, dev_num,
+				 &info->slc_leb_size))
+			return -1;
+		if (dev_read_int(lib->dev_max_lebs_per_peb, dev_num,
+				 &info->max_lebs_per_peb))
+			return -1;
+	}
 
 	return 0;
 
