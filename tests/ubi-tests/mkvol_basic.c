@@ -55,6 +55,7 @@ static int mkvol_alignment(void)
 
 		/* Bear in mind alignment reduces EB size */
 		req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+					      UBI_VOL_MODE_NORMAL, 0,
 					      dev_info.avail_pebs);
 
 		req.vol_type = UBI_DYNAMIC_VOLUME;
@@ -99,6 +100,7 @@ static int mkvol_basic(void)
 	req.vol_id = UBI_VOL_NUM_AUTO;
 	req.alignment = 1;
 	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      UBI_VOL_MODE_NORMAL, 0,
 				      dev_info.avail_pebs);
 	req.vol_type = UBI_DYNAMIC_VOLUME;
 	req.name = name;
@@ -121,6 +123,7 @@ static int mkvol_basic(void)
 	req.vol_id = UBI_VOL_NUM_AUTO;
 	req.alignment = 1;
 	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      UBI_VOL_MODE_NORMAL, 0,
 				      dev_info.avail_pebs);
 	req.vol_type = UBI_STATIC_VOLUME;
 	req.name = name;

@@ -71,7 +71,8 @@ static int test_static(void)
 
 	req.vol_id = UBI_VOL_NUM_AUTO;
 	req.alignment = 1;
-	req.bytes = ubi_pebs_to_bytes(&dev_info, 1, dev_info.avail_pebs);
+	req.bytes = ubi_pebs_to_bytes(&dev_info, 1, UBI_VOL_MODE_NORMAL, 0,
+				      dev_info.avail_pebs);
 	req.vol_type = UBI_STATIC_VOLUME;
 	req.name = name;
 

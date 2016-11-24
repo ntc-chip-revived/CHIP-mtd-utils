@@ -123,6 +123,24 @@ static int param_sanity_check(void)
 	return 0;
 }
 
+static const char * const vol_modes[] = {
+	[UBI_VOL_MODE_NORMAL] = "normal",
+	[UBI_VOL_MODE_SLC] = "slc",
+	[UBI_VOL_MODE_MLC_SAFE] = "mlc-safe",
+};
+
+static int vol_mode_from_name(const char *name)
+{
+	int i;
+
+	for (i = 0; ARRAY_SIZE(vol_modes); i++) {
+		if (!strcmp(name, vol_modes[i]))
+			return i;
+	}
+
+	return -EINVAL;
+}
+
 static int parse_opt(int argc, char * const argv[])
 {
 	while (1) {
@@ -143,13 +161,8 @@ static int parse_opt(int argc, char * const argv[])
 			break;
 
 		case 'M':
-			if (!strcmp(optarg, "normal"))
-				args.vol_mode = UBI_DYNAMIC_VOLUME;
-			else if (!strcmp(optarg, "slc"))
-				args.vol_mode = UBI_VOL_MODE_SLC;
-			else if (!strcmp(optarg, "mlc-safe"))
-				args.vol_mode = UBI_VOL_MODE_MLC_SAFE;
-			else
+			args.vol_mode = vol_mode_from_name(optarg);
+			if (args.vol_mode < 0)
 				return errmsg("bad volume mode: \"%s\"", optarg);
 			break;
 
@@ -267,8 +280,16 @@ int main(int argc, char * const argv[])
 		goto out_libubi;
 	}
 
+	if (dev_info.version < 2 &&
+	    args.vol_mode != UBI_VOL_MODE_SLC) {
+		errmsg("UBI device does not support mode %s",
+		       vol_modes[args.vol_mode]);
+		goto out_libubi;
+	}
+
 	if (args.maxavs) {
 		args.bytes = ubi_pebs_to_bytes(&dev_info, args.alignment,
+					       args.vol_mode, args.slc_ratio,
 					       dev_info.avail_pebs);
 		printf("Set volume size to %lld\n", args.bytes);
 	}
@@ -281,11 +302,14 @@ int main(int argc, char * const argv[])
 
 	req.vol_id = args.vol_id;
 	req.alignment = args.alignment;
-	req.bytes = args.bytes;
 	req.vol_type = args.vol_type;
 	req.vol_mode = args.vol_mode;
-	req.slc_ratio = args.slc_ratio;
 	req.name = args.name;
+
+	if (args.vol_mode != UBI_VOL_MODE_MLC_SAFE)
+		req.slc_ratio = args.slc_ratio;
+
+	req.bytes = args.bytes;
 
 	err = ubi_mkvol(libubi, args.node, &req);
 	if (err < 0) {

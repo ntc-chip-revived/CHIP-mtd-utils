@@ -587,6 +587,7 @@ libubi_t libubi_open(void)
 	lib->dev_max_lebs_per_peb = mkpath(lib->ubi_dev, DEV_MAX_LEBS_PER_PEB);
 	if (!lib->dev_max_lebs_per_peb)
 		goto out_error;
+
 	lib->dev_max_ec = mkpath(lib->ubi_dev, DEV_MAX_EC);
 	if (!lib->dev_max_ec)
 		goto out_error;
@@ -1417,10 +1418,121 @@ int ubi_is_mapped(int fd, int lnum)
 	return ioctl(fd, UBI_IOCEBISMAP, &lnum);
 }
 
-long long ubi_pebs_to_bytes(struct ubi_dev_info *dev_info, int alignment,
-			    int npebs)
-{
-	int leb_size = dev_info->leb_size - dev_info->leb_size % alignment;
+#define UBI_MIN_SLC_MLC_RATIO		5
+#define UBI_MIN_SLC_LEBS		16
+#define DIV_ROUND_UP(x, y)		(((x) + ((y) - 1)) / (y))
 
-	return (long long)leb_size * npebs;
+int ubi_lebs_to_pebs(const struct ubi_dev_info *dev_info, int vol_mode,
+		     int slc_ratio, int lebs)
+{
+	int rsvd_pebs, max_lebs_per_peb = dev_info->max_lebs_per_peb;
+	int slc_lebs, normal_lebs;
+
+	/* In this case a PEB always contain only one LEB. */
+	if (vol_mode != UBI_VOL_MODE_MLC_SAFE)
+		return lebs;
+
+	if (slc_ratio < UBI_MIN_SLC_MLC_RATIO)
+		return -EINVAL;
+
+	/* Calculate the number of PEBs reserved for SLC LEBs. */
+	slc_lebs = DIV_ROUND_UP(slc_ratio * lebs, 100);
+	if (slc_lebs < UBI_MIN_SLC_LEBS)
+		slc_lebs = UBI_MIN_SLC_LEBS;
+
+	/*
+	 * If the number of requested LEBs is lower than or equal to the number
+	 * number of LEBs in SLC mode, then we can store all data in SLC mode
+	 * and avoid consolidation.
+	 * The + 1 here is accounting for the extra PEB reserved for
+	 * consolidation.
+	 */
+	if (lebs <= (slc_lebs + 1))
+		return lebs;
+
+	/*
+	 * Now calculate the number of LEBs that can in stored in MLC mode.
+	 */
+	normal_lebs = lebs - slc_lebs;
+	rsvd_pebs = slc_lebs + DIV_ROUND_UP(normal_lebs, max_lebs_per_peb);
+
+	/*
+	 * Reserve some PEBs to store LEBs in non-consolidated PEBs so that we
+	 * don't end-up consolidating/invalidating the same LEBs over and over.
+	 *
+	 * This is obtained with the following formula:
+	 *
+	 * #PEBs = (#LEBs * RATIO) + ((#LEBs - (#LEBs * RATIO)) / #LEBsperCPEB)
+	 *
+	 * Which after simplification gives:
+	 *
+	 * #PEBs = (#LEBs * ((RATIO * (#LEBSperCPEB - 1)) + 1)) / #LEBsperCPEB
+	 */
+
+	/* Reserve a PEB for consolidation. */
+	rsvd_pebs += 1;
+
+	return rsvd_pebs;
+}
+
+int ubi_pebs_to_lebs(const struct ubi_dev_info *ubi, int vol_mode,
+		     int slc_ratio, int npebs)
+{
+	int lebs;
+
+	if (vol_mode != UBI_VOL_MODE_MLC_SAFE)
+		return npebs;
+
+	/* A minimum of 5% is required. */
+	if (slc_ratio < UBI_MIN_SLC_MLC_RATIO) {
+		errmsg("invalid slc_ratio value %d", slc_ratio);
+		return -EINVAL;
+	}
+
+	/*
+	 * We enforce a minimum of 16 LEBs in SLC mode, and since we need an
+	 * extra PEB for consolidation we actually need 17 PEBs.
+	 * In case we don't have enough PEBs, just use all the PEBs in SLC
+	 * mode.
+	 */
+	if (npebs <= UBI_MIN_SLC_LEBS + 1)
+		return npebs;
+
+	/*
+	 * FIXME: this is an suboptimal solution to find how much LEBs can
+	 * be provided by the number of reserved PEBs.
+	 * We just iterate over all possible values until we find the best
+	 * one.
+	 */
+	for (lebs = npebs * ubi->max_lebs_per_peb;
+	     lebs >= npebs; lebs--) {
+		int pebs;
+
+		pebs = ubi_lebs_to_pebs(ubi, vol_mode, slc_ratio, lebs);
+		if (pebs <= npebs)
+			break;
+	}
+
+	return lebs;
+}
+
+long long ubi_pebs_to_bytes(struct ubi_dev_info *dev_info, int alignment,
+			    int vol_mode, int slc_ratio, int npebs)
+{
+	int leb_size, nlebs = npebs;
+
+	if (npebs > dev_info->avail_pebs)
+		return -ENOSPC;
+
+	if (vol_mode == UBI_VOL_MODE_SLC ||
+	    vol_mode == UBI_VOL_MODE_MLC_SAFE)
+		leb_size = dev_info->slc_leb_size;
+	else
+		leb_size = dev_info->leb_size;
+
+	leb_size = dev_info->leb_size - dev_info->leb_size % alignment;
+
+	nlebs = ubi_pebs_to_lebs(dev_info, vol_mode, slc_ratio, npebs);
+
+	return (long long)leb_size * nlebs;
 }

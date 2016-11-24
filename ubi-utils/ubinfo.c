@@ -243,7 +243,7 @@ static int print_dev_info(libubi_t libubi, int dev_num, int all)
 	util_print_bytes(dev_info.leb_size, 0);
 	printf("\n");
 	printf("logical eraseblock size in SLC mode:     ");
-	ubiutils_print_bytes(dev_info.slc_leb_size, 0);
+	util_print_bytes(dev_info.slc_leb_size, 0);
 	printf("\n");
 
 	printf("Maximum number of LEBs per PEB:           %d\n", dev_info.max_lebs_per_peb);

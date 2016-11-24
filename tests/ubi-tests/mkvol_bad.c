@@ -47,6 +47,7 @@ static int test_mkvol(void)
 
 	req.alignment = 1;
 	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      UBI_VOL_MODE_NORMAL, 0,
 				      dev_info.avail_pebs);
 	req.vol_type = UBI_DYNAMIC_VOLUME;
 	req.name = name;
@@ -103,6 +104,7 @@ static int test_mkvol(void)
 		return -1;
 
 	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      UBI_VOL_MODE_NORMAL, 0,
 				      dev_info.avail_pebs) + 1;
 	ret = ubi_mkvol(libubi, node, &req);
 	if (check_failed(ret, ENOSPC, "ubi_mkvol", "bytes = %lld", req.bytes))
@@ -110,6 +112,7 @@ static int test_mkvol(void)
 
 	req.alignment = dev_info.leb_size - dev_info.min_io_size;
 	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      UBI_VOL_MODE_NORMAL, 0,
 				      dev_info.avail_pebs) + 1;
 	ret = ubi_mkvol(libubi, node, &req);
 	if (check_failed(ret, ENOSPC, "ubi_mkvol", "bytes = %lld", req.bytes))
@@ -167,6 +170,7 @@ static int test_mkvol(void)
 	/* Try to use too much space */
 	req.vol_id = 0;
 	avail_bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+					UBI_VOL_MODE_NORMAL, 0,
 					dev_info.avail_pebs);
 	req.bytes = avail_bytes;
 	if (ubi_mkvol(libubi, node, &req)) {
@@ -254,6 +258,7 @@ static int test_rmvol(void)
 	req.vol_id = UBI_VOL_NUM_AUTO;
 	req.alignment = 1;
 	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      UBI_VOL_MODE_NORMAL, 0,
 				      dev_info.avail_pebs);
 	req.vol_type = UBI_DYNAMIC_VOLUME;
 	req.name = name;

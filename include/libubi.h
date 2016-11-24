@@ -68,6 +68,10 @@ struct ubi_attach_request
  * @alignment: volume alignment
  * @bytes: volume size in bytes
  * @vol_type: volume type (%UBI_DYNAMIC_VOLUME or %UBI_STATIC_VOLUME)
+ * @vol_mode: volume type (%UBI_VOL_MODE_NORMAL, %UBI_VOL_MODE_SLC or
+ *	      %UBI_VOL_MODE_MLC_SAFE)
+ * @slc_ratio: SLC vs MLC PEB ratio. Only meaningful when @vol_mode is set to
+ *	       %UBI_VOL_MODE_MLC_SAFE
  * @name: volume name
  */
 struct ubi_mkvol_request
@@ -488,6 +492,8 @@ int ubi_is_mapped(int fd, int lnum);
  *		       reserved
  * @dev_info: UBI device descriptor
  * @alignment: LEB alignment
+ * @vol_mode: volume mode
+ * @slc_ratio: SLC vs MLC PEBs ratio
  * @npebs: number of PEBs reserved for this new volume
  *
  * Calculate the number of bytes provided by @npebs PEBs.
@@ -495,7 +501,7 @@ int ubi_is_mapped(int fd, int lnum);
  * LEB alignment.
  */
 long long ubi_pebs_to_bytes(struct ubi_dev_info *dev_info, int alignment,
-			    int npebs);
+			    int vol_mode, int slc_ratio, int npebs);
 
 #ifdef __cplusplus
 }

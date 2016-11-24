@@ -51,6 +51,7 @@ static void * the_thread(void *ptr)
 
 	req.alignment = 1;
 	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      UBI_VOL_MODE_NORMAL, 0,
 				      dev_info.avail_pebs) / ITERATIONS;
 	req.vol_type = UBI_DYNAMIC_VOLUME;
 	sprintf(nm, "%s:%d", name, n);

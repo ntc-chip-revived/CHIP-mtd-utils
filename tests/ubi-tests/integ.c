@@ -471,8 +471,10 @@ static void operate_on_ubi_device(struct ubi_device_info *ubi_device)
 		req.name = "integ-test-vol";
 
 		req.bytes = ubi_pebs_to_bytes(&ubi_device->info, 1,
+					      UBI_VOL_MODE_NORMAL, 0,
 					      max_ebs_per_vol);
 		avail_bytes = ubi_pebs_to_bytes(&ubi_device->info, 1,
+						UBI_VOL_MODE_NORMAL, 0,
 						ubi_device->info.avail_pebs);
 
 		if (req.bytes == 0 || req.bytes > avail_bytes)
@@ -560,8 +562,10 @@ static void get_ubi_devices_info(void)
 			buf_size = s->info.leb_size;
 
 		avail_bytes = ubi_pebs_to_bytes(&s->info, 1,
+						UBI_VOL_MODE_NORMAL, 0,
 						s->info.avail_pebs);
-		max_bytes = ubi_pebs_to_bytes(&s->info, 1, max_ebs_per_vol);
+		max_bytes = ubi_pebs_to_bytes(&s->info, 1, UBI_VOL_MODE_NORMAL,
+					      0, max_ebs_per_vol);
 		if (max_ebs_per_vol && max_bytes < avail_bytes)
 			total_space += max_bytes;
 		else
