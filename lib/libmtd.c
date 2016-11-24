@@ -617,6 +617,10 @@ libmtd_t libmtd_open(void)
 	if (!lib->mtd_flags)
 		goto out_error;
 
+	lib->mtd_pairing_scheme = mkpath(lib->mtd, MTD_PAIRING_SCHEME);
+	if (!lib->mtd_pairing_scheme)
+		goto out_error;
+
 	lib->sysfs_supported = 1;
 	return lib;
 
@@ -734,6 +738,7 @@ int mtd_get_dev_info1(libmtd_t desc, int mtd_num, struct mtd_dev_info *mtd)
 {
 	int ret;
 	struct libmtd *lib = (struct libmtd *)desc;
+	char pairing_scheme[32];
 
 	memset(mtd, 0, sizeof(struct mtd_dev_info));
 	mtd->mtd_num = mtd_num;
@@ -779,6 +784,10 @@ int mtd_get_dev_info1(libmtd_t desc, int mtd_num, struct mtd_dev_info *mtd)
 	mtd->type = type_str2int(mtd->type_str);
 	mtd->bb_allowed = !!(mtd->type == MTD_NANDFLASH ||
 				mtd->type == MTD_MLCNANDFLASH);
+
+	if (!dev_read_data(lib->mtd_pairing_scheme, mtd_num,
+			   pairing_scheme, sizeof(pairing_scheme) - 1))
+		mtd->pairing = mtd_get_pairing_scheme(pairing_scheme);
 
 	return 0;
 }
@@ -1336,4 +1345,123 @@ int mtd_probe_node(libmtd_t desc, const char *node)
 
 	errno = 0;
 	return -1;
+}
+
+static int mtd_wunit_per_eb(const struct mtd_dev_info *mtd)
+{
+	return mtd->eb_size / mtd->min_io_size;
+}
+
+int mtd_wunit_to_pairing_info(const struct mtd_dev_info *mtd, int wunit,
+			      struct mtd_pairing_info *info)
+{
+	int npairs = mtd_wunit_per_eb(mtd) / mtd_pairing_groups(mtd);
+
+	if (wunit < 0 || wunit >= npairs)
+		return -EINVAL;
+
+	if (mtd->pairing && mtd->pairing->get_info)
+		return mtd->pairing->get_info(mtd, wunit, info);
+
+	info->group = 0;
+	info->pair = wunit;
+
+	return 0;
+}
+
+int mtd_pairing_info_to_wunit(const struct mtd_dev_info *mtd,
+			      const struct mtd_pairing_info *info)
+{
+	int ngroups = mtd_pairing_groups(mtd);
+	int npairs = mtd_wunit_per_eb(mtd) / ngroups;
+
+	if (!info || info->pair < 0 || info->pair >= npairs ||
+	    info->group < 0 || info->group >= ngroups)
+		return -EINVAL;
+
+	if (mtd->pairing && mtd->pairing->get_wunit)
+		return mtd->pairing->get_wunit(mtd, info);
+
+	return info->pair;
+}
+
+int mtd_pairing_groups(const struct mtd_dev_info *mtd)
+{
+	if (!mtd->pairing || !mtd->pairing->ngroups)
+		return 1;
+
+	return mtd->pairing->ngroups;
+}
+
+static int mlc_dist3_get_info(const struct mtd_dev_info *mtd, int page,
+			      struct mtd_pairing_info *info)
+{
+	bool lastpage = ((page + 1) * mtd->min_io_size) == mtd->eb_size;
+
+	/*
+	 * The first and last pages are special cases.
+	 * To simplify the code and keep the same distance for everyone, we
+	 * increment all pages by 1 except the first one (page 0). The last
+	 * page receives an extra +1 for the same reason.
+	 */
+	page += (page != 0) + lastpage;
+
+	/*
+	 * The datasheets state that odd pages should be part of group
+	 * 0 and even ones part of group 1 (except for the last and
+	 * first pages), but we incremented the page number, that's why we're
+	 * doing the reverse test here.
+	 */
+	info->group = page & 1;
+
+	/*
+	 * We're trying to extract the pair id, which is always equal to
+	 * first_page_of_a_pair / 2. Subtract the distance to the page if it's
+	 * not part of group 0.
+	 */
+	if (page & 1)
+		page -= 3;
+
+	info->pair = page >> 1;
+
+	return 0;
+}
+
+static int mlc_dist3_get_wunit(const struct mtd_dev_info *mtd,
+			       const struct mtd_pairing_info *info)
+{
+	int page = (info->pair * 2) + (3 * info->group);
+	bool lastpage = ((page * mtd->min_io_size) > mtd->eb_size);
+
+	/*
+	 * The first and last pages are special cases.
+	 * To simplify the code and keep the same distance for everyone, we
+	 * incremented all pages by 1 except the first one (page 0). The last
+	 * page received an extra +1 for the same reason. Now we need to
+	 * revert that to get the real page number.
+	 */
+	page -= (page != 0) + lastpage;
+
+	return page;
+}
+
+const struct mtd_pairing_scheme pairing_schemes[] = {
+	{
+		.name = "mlc-dist3",
+		.ngroups = 2,
+		.get_info = mlc_dist3_get_info,
+		.get_wunit = mlc_dist3_get_wunit,
+	},
+};
+
+const struct mtd_pairing_scheme *mtd_get_pairing_scheme(const char *name)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(pairing_schemes); i++) {
+		if (!strcmp(pairing_schemes[i].name, name))
+			return &pairing_schemes[i];
+	}
+
+	return NULL;
 }

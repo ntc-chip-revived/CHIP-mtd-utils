@@ -46,6 +46,7 @@ extern "C" {
 #define MTD_OOB_SIZE     "oobsize"
 #define MTD_REGION_CNT   "numeraseregions"
 #define MTD_FLAGS        "flags"
+#define MTD_PAIRING_SCHEME "pairing_scheme"
 
 #define OFFS64_IOCTLS_UNKNOWN       0
 #define OFFS64_IOCTLS_NOT_SUPPORTED 1
@@ -65,6 +66,7 @@ extern "C" {
  * @mtd_oob_size: MTD device OOB size file pattern
  * @mtd_region_cnt: count of additional erase regions file pattern
  * @mtd_flags: MTD device flags file pattern
+ * @mtd_pairing_scheme: MTD pairing scheme file pattern
  * @sysfs_supported: non-zero if sysfs is supported by MTD
  * @offs64_ioctls: %OFFS64_IOCTLS_SUPPORTED if 64-bit %MEMERASE64,
  *                 %MEMREADOOB64, %MEMWRITEOOB64 MTD device ioctls are
@@ -94,6 +96,7 @@ struct libmtd
 	char *mtd_oob_size;
 	char *mtd_region_cnt;
 	char *mtd_flags;
+	char *mtd_pairing_scheme;
 	unsigned int sysfs_supported:1;
 	unsigned int offs64_ioctls:2;
 };

@@ -37,6 +37,7 @@ typedef void * libmtd_t;
 
 /* Forward decls */
 struct region_info_user;
+struct mtd_dev_info;
 
 /**
  * @mtd_dev_cnt: count of MTD devices in system
@@ -50,6 +51,84 @@ struct mtd_info
 	int lowest_mtd_num;
 	int highest_mtd_num;
 	unsigned int sysfs_supported:1;
+};
+
+/**
+ * struct mtd_pairing_info - page pairing information
+ *
+ * @pair: pair id
+ * @group: group id
+ *
+ * The term "pair" is used here, even though TLC NANDs might group pages by 3
+ * (3 bits in a single cell). A pair should regroup all pages that are sharing
+ * the same cell. Pairs are then indexed in ascending order.
+ *
+ * @group is defining the position of a page in a given pair. It can also be
+ * seen as the bit position in the cell: page attached to bit 0 belongs to
+ * group 0, page attached to bit 1 belongs to group 1, etc.
+ *
+ * Example:
+ * The H27UCG8T2BTR-BC datasheet describes the following pairing scheme:
+ *
+ *		group-0		group-1
+ *
+ *  pair-0	page-0		page-4
+ *  pair-1	page-1		page-5
+ *  pair-2	page-2		page-8
+ *  ...
+ *  pair-127	page-251	page-255
+ *
+ *
+ * Note that the "group" and "pair" terms were extracted from Samsung and
+ * Hynix datasheets, and might be referenced under other names in other
+ * datasheets (Micron is describing this concept as "shared pages").
+ */
+struct mtd_pairing_info {
+	int pair;
+	int group;
+};
+
+/**
+ * struct mtd_pairing_scheme - page pairing scheme description
+ *
+ * @name: name of the pairing scheme (this information is exposed in
+ *	  sysfs).
+ * @ngroups: number of groups. Should be related to the number of bits
+ *	     per cell.
+ * @get_info: converts a write-unit (page number within an erase block) into
+ *	      mtd_pairing information (pair + group). This function should
+ *	      fill the info parameter based on the wunit index or return
+ *	      -EINVAL if the wunit parameter is invalid.
+ * @get_wunit: converts pairing information into a write-unit (page) number.
+ *	       This function should return the wunit index pointed by the
+ *	       pairing information described in the info argument. It should
+ *	       return -EINVAL, if there's no wunit corresponding to the
+ *	       passed pairing information.
+ *
+ * See mtd_pairing_info documentation for a detailed explanation of the
+ * pair and group concepts.
+ *
+ * The mtd_pairing_scheme structure provides a generic solution to represent
+ * NAND page pairing scheme. Instead of exposing two big tables to do the
+ * write-unit <-> (pair + group) conversions.
+ *
+ * MTD users will then be able to query these information by using the
+ * mtd_pairing_info_to_wunit() and mtd_wunit_to_pairing_info() helpers.
+ *
+ * @ngroups is here to help MTD users iterating over all the pages in a
+ * given pair. This value can be retrieved by MTD users using the
+ * mtd_pairing_groups() helper.
+ *
+ * Examples are given in the mtd_pairing_info_to_wunit() and
+ * mtd_wunit_to_pairing_info() documentation.
+ */
+struct mtd_pairing_scheme {
+	const char *name;
+	int ngroups;
+	int (*get_info)(const struct mtd_dev_info *mtd, int wunit,
+			struct mtd_pairing_info *info);
+	int (*get_wunit)(const struct mtd_dev_info *mtd,
+			 const struct mtd_pairing_info *info);
 };
 
 /**
@@ -69,6 +148,7 @@ struct mtd_info
  * @region_cnt: count of additional erase regions
  * @writable: zero if the device is read-only
  * @bb_allowed: non-zero if the MTD device may have bad eraseblocks
+ * @pairing: wunit pairing scheme, if any
  */
 struct mtd_dev_info
 {
@@ -87,6 +167,7 @@ struct mtd_dev_info
 	int region_cnt;
 	unsigned int writable:1;
 	unsigned int bb_allowed:1;
+	const struct mtd_pairing_scheme *pairing;
 };
 
 /**
@@ -343,6 +424,82 @@ int mtd_write_oob(libmtd_t desc, const struct mtd_dev_info *mtd, int fd,
  * occurred.
  */
 int mtd_probe_node(libmtd_t desc, const char *node);
+
+/**
+ * mtd_wunit_to_pairing_info - get pairing information of a wunit
+ * @mtd: pointer to new MTD device info structure
+ * @wunit: write unit we are interested in
+ * @info: returned pairing information
+ *
+ * Retrieve pairing information associated to the wunit.
+ * This is mainly useful when dealing with MLC/TLC NANDs where pages can be
+ * paired together, and where programming a page may influence the page it is
+ * paired with.
+ * The notion of page is replaced by the term wunit (write-unit) to stay
+ * consistent with the ->writesize field.
+ *
+ * The @wunit argument can be extracted from an absolute offset using
+ * mtd_offset_to_wunit(). @info is filled with the pairing information attached
+ * to @wunit.
+ *
+ * From the pairing info the MTD user can find all the wunits paired with
+ * @wunit using the following loop:
+ *
+ * for (i = 0; i < mtd_pairing_groups(mtd); i++) {
+ *	info.pair = i;
+ *	mtd_pairing_info_to_wunit(mtd, &info);
+ *	...
+ * }
+ */
+int mtd_wunit_to_pairing_info(const struct mtd_dev_info *mtd, int wunit,
+			      struct mtd_pairing_info *info);
+
+/**
+ * mtd_wunit_to_pairing_info - get wunit from pairing information
+ * @mtd: pointer to new MTD device info structure
+ * @info: pairing information struct
+ *
+ * Returns a positive number representing the wunit associated to the info
+ * struct, or a negative error code.
+ *
+ * This is the reverse of mtd_wunit_to_pairing_info(), and can help one to
+ * iterate over all wunits of a given pair (see mtd_wunit_to_pairing_info()
+ * doc).
+ *
+ * It can also be used to only program the first page of each pair (i.e.
+ * page attached to group 0), which allows one to use an MLC NAND in
+ * software-emulated SLC mode:
+ *
+ * info.group = 0;
+ * npairs = mtd_wunit_per_eb(mtd) / mtd_pairing_groups(mtd);
+ * for (info.pair = 0; info.pair < npairs; info.pair++) {
+ *	wunit = mtd_pairing_info_to_wunit(mtd, &info);
+ *	mtd_write(mtd, mtd_wunit_to_offset(mtd, blkoffs, wunit),
+ *		  mtd->writesize, &retlen, buf + (i * mtd->writesize));
+ * }
+ */
+int mtd_pairing_info_to_wunit(const struct mtd_dev_info *mtd,
+			      const struct mtd_pairing_info *info);
+
+/**
+ * mtd_pairing_groups - get the number of pairing groups
+ * @mtd: pointer to new MTD device info structure
+ *
+ * Returns the number of pairing groups.
+ *
+ * This number is usually equal to the number of bits exposed by a single
+ * cell, and can be used in conjunction with mtd_pairing_info_to_wunit()
+ * to iterate over all pages of a given pair.
+ */
+int mtd_pairing_groups(const struct mtd_dev_info *mtd);
+
+/**
+ * mtd_get_pairing_scheme - get a pairing scheme object from its name
+ * @name: pairing scheme name
+ *
+ * Returns the pairing scheme descriptor or NULL if it does not exist.
+ */
+const struct mtd_pairing_scheme *mtd_get_pairing_scheme(const char *name);
 
 #ifdef __cplusplus
 }
