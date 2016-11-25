@@ -107,11 +107,9 @@ struct ubi_info
  * @highest_vol_id: highest volume ID
  * @major: major number of corresponding character device
  * @minor: minor number of corresponding character device
- * @total_lebs: total number of logical eraseblocks on this UBI device
- * @avail_lebs: how many logical eraseblocks are not used and available for new
+ * @total_pebs: total number of logical eraseblocks on this UBI device
+ * @avail_pebs: how many logical eraseblocks are not used and available for new
  *             volumes
- * @total_bytes: @total_lebs * @leb_size
- * @avail_bytes: @avail_lebs * @leb_size
  * @bad_count: count of bad physical eraseblocks
  * @leb_size: logical eraseblock size
  * @max_ec: current highest erase counter value
@@ -129,10 +127,8 @@ struct ubi_dev_info
 	int highest_vol_id;
 	int major;
 	int minor;
-	int total_lebs;
-	int avail_lebs;
-	long long total_bytes;
-	long long avail_bytes;
+	int total_pebs;
+	int avail_pebs;
 	int bad_count;
 	int leb_size;
 	long long max_ec;
@@ -477,6 +473,20 @@ int ubi_leb_unmap(int fd, int lnum);
  * set with %EBADF error code.
  */
 int ubi_is_mapped(int fd, int lnum);
+
+/**
+ * ubi_pebs_to_bytes - calculate the number of bytes provided when N PEBs are
+ *		       reserved
+ * @dev_info: UBI device descriptor
+ * @alignment: LEB alignment
+ * @npebs: number of PEBs reserved for this new volume
+ *
+ * Calculate the number of bytes provided by @npebs PEBs.
+ * This calculation is based on the number of PEBs and the LEB size and the
+ * LEB alignment.
+ */
+long long ubi_pebs_to_bytes(struct ubi_dev_info *dev_info, int alignment,
+			    int npebs);
 
 #ifdef __cplusplus
 }

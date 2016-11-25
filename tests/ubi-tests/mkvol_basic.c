@@ -54,8 +54,8 @@ static int mkvol_alignment(void)
 			req.alignment = dev_info.min_io_size;
 
 		/* Bear in mind alignment reduces EB size */
-		ebsz = dev_info.leb_size - dev_info.leb_size % req.alignment;
-		req.bytes = (long long)dev_info.avail_lebs * ebsz;
+		req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+					      dev_info.avail_pebs);
 
 		req.vol_type = UBI_DYNAMIC_VOLUME;
 		req.name = name;
@@ -98,7 +98,8 @@ static int mkvol_basic(void)
 	/* Create dynamic volume of maximum size */
 	req.vol_id = UBI_VOL_NUM_AUTO;
 	req.alignment = 1;
-	req.bytes = dev_info.avail_bytes;
+	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      dev_info.avail_pebs);
 	req.vol_type = UBI_DYNAMIC_VOLUME;
 	req.name = name;
 
@@ -119,7 +120,8 @@ static int mkvol_basic(void)
 	/* Create static volume of maximum size */
 	req.vol_id = UBI_VOL_NUM_AUTO;
 	req.alignment = 1;
-	req.bytes = dev_info.avail_bytes;
+	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      dev_info.avail_pebs);
 	req.vol_type = UBI_STATIC_VOLUME;
 	req.name = name;
 

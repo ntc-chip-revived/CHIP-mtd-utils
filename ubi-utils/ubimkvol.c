@@ -239,13 +239,14 @@ int main(int argc, char * const argv[])
 		goto out_libubi;
 	}
 
-	if (dev_info.avail_bytes == 0) {
+	if (dev_info.avail_pebs == 0) {
 		errmsg("UBI device does not have free logical eraseblocks");
 		goto out_libubi;
 	}
 
 	if (args.maxavs) {
-		args.bytes = dev_info.avail_bytes;
+		args.bytes = ubi_pebs_to_bytes(&dev_info, args.alignment,
+					       dev_info.avail_pebs);
 		printf("Set volume size to %lld\n", args.bytes);
 	}
 

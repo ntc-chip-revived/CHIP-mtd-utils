@@ -52,7 +52,7 @@ static int test_basic(int type)
 
 	req.vol_id = UBI_VOL_NUM_AUTO;
 	req.alignment = 1;
-	req.bytes = dev_info.avail_bytes;
+	req.bytes = ubi_pebs_to_bytes(&dev_info, 1, dev_info.avail_pebs);
 	req.vol_type = type;
 	req.name = name;
 
@@ -68,7 +68,7 @@ static int test_basic(int type)
 		goto remove;
 
 	/* Write 0xA5 bytes to the volume */
-	if (update_vol_patt(vol_node, dev_info.avail_bytes, 0xA5))
+	if (update_vol_patt(vol_node, req.bytes, 0xA5))
 		goto remove;
 	if (check_vol_patt(vol_node, 0xA5))
 		goto remove;

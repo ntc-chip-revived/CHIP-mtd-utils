@@ -70,11 +70,11 @@ int __initial_check(const char *test, int argc, char * const argv[])
 		goto close;
 	}
 
-	if (dev_info.avail_lebs < MIN_AVAIL_EBS) {
+	if (dev_info.avail_pebs < MIN_AVAIL_EBS) {
 		__errorm(test, __func__, __LINE__,
 			 "insufficient available eraseblocks %d on UBI "
 			 "device, required %d",
-			 dev_info.avail_lebs, MIN_AVAIL_EBS);
+			 dev_info.avail_pebs, MIN_AVAIL_EBS);
 		goto close;
 	}
 

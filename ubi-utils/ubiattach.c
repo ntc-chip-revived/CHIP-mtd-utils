@@ -236,11 +236,9 @@ int main(int argc, char * const argv[])
 		goto out_libubi;
 	}
 
-	printf("UBI device number %d, total %d LEBs (", dev_info.dev_num, dev_info.total_lebs);
-	util_print_bytes(dev_info.total_bytes, 0);
-	printf("), available %d LEBs (", dev_info.avail_lebs);
-	util_print_bytes(dev_info.avail_bytes, 0);
-	printf("), LEB size ");
+	printf("UBI device number %d, total %d PEBs", dev_info.dev_num, dev_info.total_pebs);
+	printf(", available %d PEBs", dev_info.avail_pebs);
+	printf(", LEB size ");
 	util_print_bytes(dev_info.leb_size, 1);
 	printf("\n");
 

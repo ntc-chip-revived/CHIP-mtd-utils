@@ -43,9 +43,11 @@ static int test_mkvol(void)
 	int ret, i;
 	struct ubi_mkvol_request req;
 	const char *name = PROGRAM_NAME ":test_mkvol()";
+	long long avail_bytes;
 
 	req.alignment = 1;
-	req.bytes = dev_info.avail_bytes;
+	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      dev_info.avail_pebs);
 	req.vol_type = UBI_DYNAMIC_VOLUME;
 	req.name = name;
 
@@ -100,14 +102,15 @@ static int test_mkvol(void)
 	if (check_failed(ret, EINVAL, "ubi_mkvol", "bytes = %lld", req.bytes))
 		return -1;
 
-	req.bytes = dev_info.avail_bytes + 1;
+	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      dev_info.avail_pebs) + 1;
 	ret = ubi_mkvol(libubi, node, &req);
 	if (check_failed(ret, ENOSPC, "ubi_mkvol", "bytes = %lld", req.bytes))
 		return -1;
 
 	req.alignment = dev_info.leb_size - dev_info.min_io_size;
-	req.bytes = (long long)(dev_info.leb_size - dev_info.leb_size % req.alignment) *
-		    dev_info.avail_lebs + 1;
+	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      dev_info.avail_pebs) + 1;
 	ret = ubi_mkvol(libubi, node, &req);
 	if (check_failed(ret, ENOSPC, "ubi_mkvol", "bytes = %lld", req.bytes))
 		return -1;
@@ -163,7 +166,9 @@ static int test_mkvol(void)
 
 	/* Try to use too much space */
 	req.vol_id = 0;
-	req.bytes = dev_info.avail_bytes;
+	avail_bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+					dev_info.avail_pebs);
+	req.bytes = avail_bytes;
 	if (ubi_mkvol(libubi, node, &req)) {
 		failed("ubi_mkvol");
 		return -1;
@@ -174,7 +179,7 @@ static int test_mkvol(void)
 	ret = ubi_mkvol(libubi, node, &req);
 	if (check_failed(ret, EEXIST, "ubi_mkvol",
 			 "created volume of maximum size %lld, but still "
-			 "can create more volumes", dev_info.avail_bytes))
+			 "can create more volumes", avail_bytes))
 		return -1;
 
 	if (ubi_rmvol(libubi, node, 0)) {
@@ -248,7 +253,8 @@ static int test_rmvol(void)
 	/* Try to remove volume twice */
 	req.vol_id = UBI_VOL_NUM_AUTO;
 	req.alignment = 1;
-	req.bytes = dev_info.avail_bytes;
+	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      dev_info.avail_pebs);
 	req.vol_type = UBI_DYNAMIC_VOLUME;
 	req.name = name;
 	if (ubi_mkvol(libubi, node, &req)) {

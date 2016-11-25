@@ -242,13 +242,8 @@ static int print_dev_info(libubi_t libubi, int dev_num, int all)
 	util_print_bytes(dev_info.leb_size, 0);
 	printf("\n");
 
-	printf("Total amount of logical eraseblocks:     %d (", dev_info.total_lebs);
-	util_print_bytes(dev_info.total_bytes, 0);
-	printf(")\n");
-
-	printf("Amount of available logical eraseblocks: %d (", dev_info.avail_lebs);
-	util_print_bytes(dev_info.avail_bytes, 0);
-	printf(")\n");
+	printf("Total amount of physical eraseblocks:     %d\n", dev_info.total_pebs);
+	printf("Amount of available physical eraseblocks: %d\n", dev_info.avail_pebs);
 
 	printf("Maximum count of volumes                 %d\n", dev_info.max_vol_count);
 	printf("Count of bad physical eraseblocks:       %d\n", dev_info.bad_count);

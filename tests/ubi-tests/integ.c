@@ -463,14 +463,20 @@ static void operate_on_ubi_device(struct ubi_device_info *ubi_device)
 		int i, n, maj, fd;
 		struct volume_info *s;
 		struct ubi_mkvol_request req;
+		long long avail_bytes;
 
 		req.vol_id = UBI_VOL_NUM_AUTO;
 		req.alignment = 1; /* TODO: What is this? */
-		req.bytes = ubi_device->info.leb_size * max_ebs_per_vol;
-		if (req.bytes == 0 || req.bytes > ubi_device->info.avail_bytes)
-			req.bytes = ubi_device->info.avail_bytes;
 		req.vol_type = UBI_DYNAMIC_VOLUME;
 		req.name = "integ-test-vol";
+
+		req.bytes = ubi_pebs_to_bytes(&ubi_device->info, 1,
+					      max_ebs_per_vol);
+		avail_bytes = ubi_pebs_to_bytes(&ubi_device->info, 1,
+						ubi_device->info.avail_pebs);
+
+		if (req.bytes == 0 || req.bytes > avail_bytes)
+			req.bytes = avail_bytes;
 		if (ubi_mkvol(libubi, ubi_device->device_file_name, &req))
 			error_exit("ubi_mkvol failed");
 		s = allocate(sizeof(*s));
@@ -539,7 +545,9 @@ static void get_ubi_devices_info(void)
 	if (info.dev_count > MAX_UBI_DEVICES)
 		error_exit("Too many ubi devices");
 	for (i = info.lowest_dev_num; i <= info.highest_dev_num; ++i) {
+		long long avail_bytes, max_bytes;
 		struct ubi_device_info *s;
+
 		s = &ubi_array[ubi_pos++];
 		if (ubi_get_dev_info1(libubi, i, &s->info))
 			error_exit("ubi_get_dev_info1 failed");
@@ -550,10 +558,14 @@ static void get_ubi_devices_info(void)
 		s->device_file_name = strdup(dev_name);
 		if (buf_size < s->info.leb_size)
 			buf_size = s->info.leb_size;
-		if (max_ebs_per_vol && s->info.leb_size * max_ebs_per_vol < s->info.avail_bytes)
-			total_space += s->info.leb_size * max_ebs_per_vol;
+
+		avail_bytes = ubi_pebs_to_bytes(&s->info, 1,
+						s->info.avail_pebs);
+		max_bytes = ubi_pebs_to_bytes(&s->info, 1, max_ebs_per_vol);
+		if (max_ebs_per_vol && max_bytes < avail_bytes)
+			total_space += max_bytes;
 		else
-			total_space += s->info.avail_bytes;
+			total_space += avail_bytes;
 	}
 	write_buffer = allocate(buf_size);
 	read_buffer = allocate(buf_size);

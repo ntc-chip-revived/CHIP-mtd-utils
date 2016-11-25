@@ -1215,9 +1215,9 @@ int ubi_get_dev_info1(libubi_t desc, int dev_num, struct ubi_dev_info *info)
 
 	if (dev_read_int(lib->dev_mtd_num, dev_num, &info->mtd_num))
 		return -1;
-	if (dev_read_int(lib->dev_avail_ebs, dev_num, &info->avail_lebs))
+	if (dev_read_int(lib->dev_avail_ebs, dev_num, &info->avail_pebs))
 		return -1;
-	if (dev_read_int(lib->dev_total_ebs, dev_num, &info->total_lebs))
+	if (dev_read_int(lib->dev_total_ebs, dev_num, &info->total_pebs))
 		return -1;
 	if (dev_read_int(lib->dev_bad_count, dev_num, &info->bad_count))
 		return -1;
@@ -1232,8 +1232,6 @@ int ubi_get_dev_info1(libubi_t desc, int dev_num, struct ubi_dev_info *info)
 	if (dev_read_int(lib->dev_min_io_size, dev_num, &info->min_io_size))
 		return -1;
 
-	info->avail_bytes = (long long)info->avail_lebs * info->leb_size;
-	info->total_bytes = (long long)info->total_lebs * info->leb_size;
 
 	return 0;
 
@@ -1388,4 +1386,12 @@ int ubi_leb_unmap(int fd, int lnum)
 int ubi_is_mapped(int fd, int lnum)
 {
 	return ioctl(fd, UBI_IOCEBISMAP, &lnum);
+}
+
+long long ubi_pebs_to_bytes(struct ubi_dev_info *dev_info, int alignment,
+			    int npebs)
+{
+	int leb_size = dev_info->leb_size - dev_info->leb_size % alignment;
+
+	return (long long)leb_size * npebs;
 }

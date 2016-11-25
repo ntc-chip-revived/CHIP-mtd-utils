@@ -50,7 +50,8 @@ static void * the_thread(void *ptr)
 	char nm[strlen(name) + 50];
 
 	req.alignment = 1;
-	req.bytes = dev_info.avail_bytes/ITERATIONS;
+	req.bytes = ubi_pebs_to_bytes(&dev_info, req.alignment,
+				      dev_info.avail_pebs) / ITERATIONS;
 	req.vol_type = UBI_DYNAMIC_VOLUME;
 	sprintf(nm, "%s:%d", name, n);
 	req.name = nm;
