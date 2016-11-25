@@ -44,6 +44,9 @@ static const char optionsstr[] =
 "                             this UBI image is created for in bytes,\n"
 "                             kilobytes (KiB), or megabytes (MiB)\n"
 "                             (mandatory parameter)\n"
+"-M, --mlc=<pairing-scheme>   MLC page pairing scheme\n"
+"                             Supported pairing schemes:\n"
+"                              mlc-dist3\n"
 "-m, --min-io-size=<bytes>    minimum input/output unit size of the flash\n"
 "                             in bytes\n"
 "-s, --sub-page-size=<bytes>  minimum input/output unit used for UBI\n"
@@ -79,6 +82,7 @@ static const struct option long_options[] = {
 	{ .name = "erase-counter",  .has_arg = 1, .flag = NULL, .val = 'e' },
 	{ .name = "ubi-ver",        .has_arg = 1, .flag = NULL, .val = 'x' },
 	{ .name = "image-seq",      .has_arg = 1, .flag = NULL, .val = 'Q' },
+	{ .name = "mlc",            .has_arg = 1, .flag = NULL, .val = 'M' },
 	{ .name = "verbose",        .has_arg = 0, .flag = NULL, .val = 'v' },
 	{ .name = "help",           .has_arg = 0, .flag = NULL, .val = 'h' },
 	{ .name = "version",        .has_arg = 0, .flag = NULL, .val = 'V' },
@@ -96,6 +100,7 @@ struct args {
 	int ec;
 	int ubi_ver;
 	uint32_t image_seq;
+	const struct mtd_pairing_scheme *pairing;
 	int verbose;
 	dictionary *dict;
 };
@@ -116,7 +121,7 @@ static int parse_opt(int argc, char * const argv[])
 		int key, error = 0;
 		unsigned long int image_seq;
 
-		key = getopt_long(argc, argv, "o:p:m:s:O:e:x:Q:vhV", long_options, NULL);
+		key = getopt_long(argc, argv, "o:p:m:M:s:O:e:x:Q:vhV", long_options, NULL);
 		if (key == -1)
 			break;
 
@@ -143,6 +148,12 @@ static int parse_opt(int argc, char * const argv[])
 				return errmsg("min. I/O unit size should be power of 2");
 			break;
 
+		case 'M':
+			args.pairing = mtd_get_pairing_scheme(optarg);
+			if (!args.pairing)
+				return errmsg("unknown pairing scheme: \"%s\"", optarg);
+
+			break;
 		case 's':
 			args.subpage_size = util_get_bytes(optarg);
 			if (args.subpage_size <= 0)
@@ -208,9 +219,6 @@ static int parse_opt(int argc, char * const argv[])
 
 	if (args.peb_size < 0)
 		return errmsg("physical eraseblock size was not specified (use -h for help)");
-
-	if (args.peb_size > UBI_MAX_PEB_SZ)
-		return errmsg("too high physical eraseblock size %d", args.peb_size);
 
 	if (args.min_io_size < 0)
 		return errmsg("min. I/O unit size was not specified (use -h for help)");
@@ -289,6 +297,28 @@ static int read_section(const struct ubigen_info *ui, const char *sname,
 
 	verbose(args.verbose, "volume type: %s",
 		vi->type == UBI_VID_DYNAMIC ? "dynamic" : "static");
+
+	/* Fetch volume mode */
+	sprintf(buf, "%s:vol_mode", sname);
+	p = iniparser_getstring(args.dict, buf, NULL);
+	if (!p) {
+		normsg("volume mode was not specified in "
+		       "section \"%s\", assume \"dynamic\"\n", sname);
+		vi->mode = UBI_VID_MODE_NORMAL;
+		p = "normal";
+	} else {
+		if (!strcmp(p, "normal"))
+			vi->mode = UBI_VID_MODE_NORMAL;
+		else if (!strcmp(p, "slc"))
+			vi->mode = UBI_VID_MODE_SLC;
+		else if (!strcmp(p, "mlc-safe"))
+			vi->mode = UBI_VID_MODE_MLC_SAFE;
+		else
+			return errmsg("invalid volume mode \"%s\" in section  \"%s\"",
+				      p, sname);
+	}
+
+	verbose(args.verbose, "volume mode: %s", p);
 
 	/* Fetch the name of the volume image file */
 	sprintf(buf, "%s:image", sname);
@@ -419,7 +449,7 @@ int main(int argc, char * const argv[])
 
 	ubigen_info_init(&ui, args.peb_size, args.min_io_size,
 			 args.subpage_size, args.vid_hdr_offs,
-			 args.ubi_ver, args.image_seq);
+			 args.ubi_ver, args.image_seq, args.pairing);
 
 	verbose(args.verbose, "LEB size:                  %d", ui.leb_size);
 	verbose(args.verbose, "PEB size:                  %d", ui.peb_size);

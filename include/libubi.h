@@ -488,6 +488,22 @@ int ubi_leb_unmap(int fd, int lnum);
 int ubi_is_mapped(int fd, int lnum);
 
 /**
+ * ubi_lebs_to_pebs - calculate the number of LEBS provided when N PEBs are
+ *		      reserved
+ * @max_lebs_per_peb: maximum number of LEBs contained in a PEB
+ * @vol_mode: volume mode
+ * @slc_ratio: SLC vs MLC PEBs ratio
+ * @nlebs: number of PEBs reserved for this new volume
+ *
+ * Calculate the number of LEBs provided by @npebs PEBs.
+ * This calculation is based on the number of PEBs and the volume mode.
+ * The maximum number of LEBs per PEB + the SLC PEB ratio is only used for
+ * MLC_SAFE volumes.
+ */
+int ubi_lebs_to_pebs(int max_lebs_per_peb, int vol_mode,
+		     int slc_ratio, int nlebs);
+
+/**
  * ubi_pebs_to_bytes - calculate the number of bytes provided when N PEBs are
  *		       reserved
  * @dev_info: UBI device descriptor
@@ -497,8 +513,10 @@ int ubi_is_mapped(int fd, int lnum);
  * @npebs: number of PEBs reserved for this new volume
  *
  * Calculate the number of bytes provided by @npebs PEBs.
- * This calculation is based on the number of PEBs and the LEB size and the
- * LEB alignment.
+ * This calculation is based on the number of PEBs and the LEB size, the
+ * LEB alignment and the volume type.
+ * If the volume is an MLC_SAFE volume, the SLC ratio is used to decide
+ * how much PEBs should be reserved to be operated in SLC mode.
  */
 long long ubi_pebs_to_bytes(struct ubi_dev_info *dev_info, int alignment,
 			    int vol_mode, int slc_ratio, int npebs);

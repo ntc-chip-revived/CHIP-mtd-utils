@@ -27,14 +27,18 @@
 
 #include <stdint.h>
 #include <mtd/ubi-media.h>
+#include <libmtd.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+struct ubigen_info;
+
 /**
  * struct ubigen_info - libubigen information.
  * @leb_size: logical eraseblock size
+ * @slc_leb_size: logical eraseblock size when used in SLC mode
  * @peb_size: size of the physical eraseblock
  * @min_io_size: minimum input/output unit size
  * @vid_hdr_offs: offset of the VID header
@@ -43,11 +47,15 @@ extern "C" {
  * @vtbl_size: volume table size
  * @max_volumes: maximum amount of volumes
  * @image_seq: UBI image sequence number
+ * @mtd: MTD info
+ * @pairing: MTD pairing scheme
  */
 struct ubigen_info
 {
 	int leb_size;
+	int slc_leb_size;
 	int peb_size;
+	int max_lebs_per_peb;
 	int min_io_size;
 	int vid_hdr_offs;
 	int data_offs;
@@ -55,12 +63,15 @@ struct ubigen_info
 	int vtbl_size;
 	int max_volumes;
 	uint32_t image_seq;
+	struct mtd_dev_info mtd;
 };
 
 /**
  * struct ubigen_vol_info - information about a volume.
  * @id: volume id
  * @type: volume type (%UBI_VID_DYNAMIC or %UBI_VID_STATIC)
+ * @mode: volume mode (%UBI_VID_MODE_NORMAL, %UBI_VID_MODE_SLC or
+ *	  %UBI_VID_MODE_MLC_SAFE)
  * @alignment: volume alignment
  * @data_pad: how many bytes are unused at the end of the each physical
  *            eraseblock to satisfy the requested alignment
@@ -79,6 +90,7 @@ struct ubigen_vol_info
 {
 	int id;
 	int type;
+	int mode;
 	int alignment;
 	int data_pad;
 	int usable_leb_size;
@@ -88,6 +100,7 @@ struct ubigen_vol_info
 	int used_ebs;
 	long long bytes;
 	uint8_t flags;
+	int slc_ratio;
 };
 
 /**
@@ -103,7 +116,8 @@ struct ubigen_vol_info
  */
 void ubigen_info_init(struct ubigen_info *ui, int peb_size, int min_io_size,
 		      int subpage_size, int vid_hdr_offs, int ubi_ver,
-		      uint32_t image_seq);
+		      uint32_t image_seq,
+		      const struct mtd_pairing_scheme *pairing);
 
 /**
  * ubigen_create_empty_vtbl - creates empty volume table.
@@ -130,6 +144,7 @@ void ubigen_init_ec_hdr(const struct ubigen_info *ui,
  * @vi: volume information
  * @hdr: the VID header to initialize
  * @lnum: logical eraseblock number
+ * @lpos: LEB position in a consolidated PEB
  * @data: the contents of the LEB (static volumes only)
  * @data_size: amount of data in this LEB (static volumes only)
  *
@@ -138,7 +153,7 @@ void ubigen_init_ec_hdr(const struct ubigen_info *ui,
  */
 void ubigen_init_vid_hdr(const struct ubigen_info *ui,
 			 const struct ubigen_vol_info *vi,
-			 struct ubi_vid_hdr *hdr, int lnum,
+			 struct ubi_vid_hdr *hdr, int lnum, int lpos,
 			 const void *data, int data_size);
 
 /**

@@ -1422,11 +1422,10 @@ int ubi_is_mapped(int fd, int lnum)
 #define UBI_MIN_SLC_LEBS		16
 #define DIV_ROUND_UP(x, y)		(((x) + ((y) - 1)) / (y))
 
-int ubi_lebs_to_pebs(const struct ubi_dev_info *dev_info, int vol_mode,
+int ubi_lebs_to_pebs(int max_lebs_per_peb, int vol_mode,
 		     int slc_ratio, int lebs)
 {
-	int rsvd_pebs, max_lebs_per_peb = dev_info->max_lebs_per_peb;
-	int slc_lebs, normal_lebs;
+	int rsvd_pebs, slc_lebs, normal_lebs;
 
 	/* In this case a PEB always contain only one LEB. */
 	if (vol_mode != UBI_VOL_MODE_MLC_SAFE)
@@ -1475,7 +1474,7 @@ int ubi_lebs_to_pebs(const struct ubi_dev_info *dev_info, int vol_mode,
 	return rsvd_pebs;
 }
 
-int ubi_pebs_to_lebs(const struct ubi_dev_info *ubi, int vol_mode,
+int ubi_pebs_to_lebs(const struct ubi_dev_info *dev_info, int vol_mode,
 		     int slc_ratio, int npebs)
 {
 	int lebs;
@@ -1504,11 +1503,12 @@ int ubi_pebs_to_lebs(const struct ubi_dev_info *ubi, int vol_mode,
 	 * We just iterate over all possible values until we find the best
 	 * one.
 	 */
-	for (lebs = npebs * ubi->max_lebs_per_peb;
+	for (lebs = npebs * dev_info->max_lebs_per_peb;
 	     lebs >= npebs; lebs--) {
 		int pebs;
 
-		pebs = ubi_lebs_to_pebs(ubi, vol_mode, slc_ratio, lebs);
+		pebs = ubi_lebs_to_pebs(dev_info->max_lebs_per_peb, vol_mode,
+					slc_ratio, lebs);
 		if (pebs <= npebs)
 			break;
 	}
